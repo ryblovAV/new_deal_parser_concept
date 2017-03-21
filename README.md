@@ -1,0 +1,1 @@
+# Simple Deal Parser Concept
