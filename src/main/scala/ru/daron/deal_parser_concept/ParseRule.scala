@@ -27,7 +27,7 @@ final case class ParseDescription(index: Int) extends ParseRule {
 final case class ParseId(index: Int) extends ParseRule {
   override def process(in: Array[String]): RawDeal => RawDeal = { rawDeal =>
     val id = parse(in)
-    rawDeal.copy(id = id)
+    rawDeal.copy(id = id.get)
   }
 }
 
