@@ -22,10 +22,10 @@ object JsonConfigReader {
 
   private def parseFieldDefinition(fieldName: String, json: JsValue): FieldParserDefinition = {
     val rules = json.as[JsObject].value.map { case (k, v) => k -> (v match {
-      case s: JsString => Left(s.value.trim)
+      case s: JsString => Left(s.value)
       case b: JsBoolean => Left(b.toString)
       case n: JsNumber => Left(n.toString)
-      case a: JsArray => Right(a.value.map(_.as[String].trim).toList)
+      case a: JsArray => Right(a.value.map(_.as[String]).toList)
       case _ => throw new Exception(s"""No value specified for field "$fieldName", rule "$k"""")
     })
     }.toMap

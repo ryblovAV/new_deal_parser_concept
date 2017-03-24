@@ -80,23 +80,28 @@ abstract class FieldParser[R](protected val field: FieldParserDefinition) extend
     throw new Exception(s"""Option "${rulesDiff.head} is not allowed for field "${field.mongoField}"""")
   }
 
-  val rules: Seq[ParserRule[_, _]] = availableRules.flatMap { s => s match {
+  val rules: Seq[ParserRule[_]] = availableRules.flatMap { s => s match {
     case "format" => fieldRules.get(s).map(new FormatRule(_))
-    case "true_format" => fieldRules.get(s).map(new BooleanTrueFormatRule(_))
-    case "false_format" => fieldRules.get(s).map(new BooleanFalseFormatRule(_))
+    case "true_format" => fieldRules.get(s).map(new BooleanTrueRule(_))
+    case "false_format" => fieldRules.get(s).map(new BooleanFalseRule(_))
+    case "delimiter" => fieldRules.get(s).map(new DelimiterRule(_))
   }}
 
   //  def parse(value: List[String]): Option[R]
 
   def parseValue(value: List[String]): Seq[(String, R)] = {
     val initValue =
-    //    if (multiValue)
-      new ReadSingleValueRule().handle(value)
+    //    if (!multiValue)
+      if (value.size > 1)
+        throw new Exception(s"""Only one value allowed for field "1"""")
+      else
+        value.headOption.map(_.trim).filter(_.nonEmpty)
     // else ...
+//    val initFieldValue = FieldValue(field.mongoField)
 
     //initValue.map(s => rules.foldLeft(s) { case (v, rule) => rule.handle(v)})
     initValue.toList.map(v => field.mongoField -> //v.asInstanceOf[R])
-    rules.headOption.map(rule => rule.asInstanceOf[ParserRule[String, R]].handle(v)).getOrElse(v.asInstanceOf[R]))
+    rules.headOption.map(rule => rule.asInstanceOf[ParserRule[R]].handle(v)).getOrElse(v.asInstanceOf[R]))
 //    initValue.toList.map { v =>
 //      rules.foldLeft(v) { case (acc, rule) => rule.})
   }
@@ -128,17 +133,28 @@ class BooleanFieldParser(field: FieldParserDefinition) extends FieldParser[Boole
   //  }
 }
 
-abstract class ParserRule[T, R] {
-  def handle(value: T): R // RawDeal => RawDeal
+class ArrayParser(field: FieldParserDefinition) extends FieldParser[Seq[String]](field) {
+  override protected def availableRules: Seq[String] = Seq("delimiter")
+}
+
+//trait ValueHandler[R] {
+//  def handle(value: String): R
+//}
+//class
+
+//class FieldValue[T](val mongoField: String, val value: T)
+
+abstract class ParserRule[R] {
+  def handle(value: String): R
 }
 //  val availableRules = Set.empty[String]
 
-class ReadSingleValueRule extends ParserRule[List[String], Option[String]] {
-  override def handle(value: List[String]): Option[String] = if (value.size > 1)
-    throw new Exception(s"""Only one value allowed for field "1"""")
-  else
-    value.headOption.map(_.trim).filter(_.nonEmpty)
-}
+//class ReadSingleValueRule extends ParserRule[List[String], Option[String]] {
+//  override def handle(value: List[String]): Option[String] = if (value.size > 1)
+//    throw new Exception(s"""Only one value allowed for field "1"""")
+//  else
+//    value.headOption.map(_.trim).filter(_.nonEmpty)
+//}
 
 //  def apply(fieldParserDefinition: FieldParserDefinition): ParserRule[T, R] = {
 //    val rulesDiff = fieldParserDefinition.rules.keySet -- availableRules
@@ -151,19 +167,25 @@ class ReadSingleValueRule extends ParserRule[List[String], Option[String]] {
 //  }
 
 
-class FormatRule(params: RuleParams) extends ParserRule[String, String] {
+class FormatRule(params: RuleParams) extends ParserRule[String] {
   private val config = params.left.get
   Formatter.process("test", config) // will throw exception in case of corrupted config
   override def handle(value: String): String = Formatter.process(value, config)
 }
 
-class BooleanTrueFormatRule(params: RuleParams) extends ParserRule[String, Boolean] {
+class BooleanTrueRule(params: RuleParams) extends ParserRule[Boolean] {
   protected val config: String = params.left.get
   override def handle(value: String): Boolean = value.toLowerCase == config.toLowerCase
 }
 
-class BooleanFalseFormatRule(params: RuleParams) extends BooleanTrueFormatRule(params) {
+class BooleanFalseRule(params: RuleParams) extends BooleanTrueRule(params) {
   override def handle(value: String): Boolean = !super.handle(value)
+}
+
+class DelimiterRule(params: RuleParams) extends ParserRule[Seq[String]] {
+  private val delimiters = params.right.get
+  override def handle(value: String): Seq[String] = delimiters.foldLeft(Array(value)) { case (arr, delimiter) =>
+    arr.flatMap(_.split(delimiter)) }.toList
 }
 
 // delimiter
@@ -179,8 +201,8 @@ object FieldParserFactory {
       case "_id" => new StringFieldParser(field)
       case "t" => new StringFieldParser(field)
       case "at" => new StringFieldParser(field)
-      case "tt" => null
-      case "tags" => null
+      case "tt" => null //new ArrayParser(field)
+      case "tags" => new ArrayParser(field)
       case "info.cf" => null
       case "info.bf" => new BooleanFieldParser(field)
       case "ia" => new BooleanFieldParser(field)
@@ -224,7 +246,7 @@ class UniversalDealParser[T](currency: Currency.Value,
         description = values.get("at").map(_.asInstanceOf[String]),
         isActive = values.get("is").map(_.asInstanceOf[Boolean]).getOrElse(false), // should be true really
         rawTokens = values.get("tt").map(_.asInstanceOf[RawTokens]).getOrElse(RawTokens.empty),
-        tags = values.get("tags").map(_.asInstanceOf[List[Tag]]).getOrElse(Nil),
+        tags = values.get("tags").map(_.asInstanceOf[List[String]].map(Tag)).getOrElse(Nil),
         addInfo = addInfo
       ) :: Nil
     }

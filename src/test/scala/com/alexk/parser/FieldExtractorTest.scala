@@ -77,6 +77,11 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |        "column_index": 1,
       |        "db_field" : "tt",
       |        "delimiter" : [" ", ":"]
+      |      },
+      |      {
+      |        "column_index": 1,
+      |        "db_field" : "tags",
+      |        "delimiter" : [" ", ":"]
       |      }
       |    ],
       |    "description" : [
@@ -117,22 +122,23 @@ class FieldExtractorTest extends FunSuite with Matchers {
   //"exclude" : ["Ignore", "these", "words"],
   //"skip_stop_words" : ["es", "us"]
 
-  val csvLine= "id12345\tThe product title\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes"
+  val csvLine= "id12345\tThe product title e2:e4\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes"
 
   test("parse JSON config") {
     val conf = JsonConfigReader.read(csvJson)
 
     conf.currency shouldBe Currency.USD
-    conf.fields should have size 7
+    conf.fields should have size 8
 
     conf.fields.find(_.mongoField == "t").get.rules("format") shouldBe Left("APPEND:;|UPPERCASE")
+    conf.fields.find(_.mongoField == "tags").get.rules("delimiter") shouldBe Right(Seq(" ", ":"))
   }
 
   test("create parser") {
     val conf = JsonConfigReader.read(csvJson)
 
     val dealParser = FeedParser(conf).dealParser.asInstanceOf[UniversalDealParser[List[String]]]
-    dealParser.fields should have size 7
+    dealParser.fields should have size 8
 
     val parsed = dealParser.parseDeal(csvLine.split('\t').toList)
 
