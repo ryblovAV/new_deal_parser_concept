@@ -73,12 +73,12 @@ class CsvFieldExtractor(fieldIndex: Map[String, Int]) extends FieldExtractor[Lis
 abstract class FieldParser[R](protected val field: FieldParserDefinition) {
   protected val multiValue: Boolean = false
 
-//  private val fieldRules = field.rules
-//  private val rulesDiff = fieldRules.keySet -- availableRules.toSet
+  protected def availableRules: Set[ParserRuleFactory[_]]
+  private val rulesDiff = field.rules.keySet -- availableRules.map(_.paramName)
 
-//  if (rulesDiff.nonEmpty) {
-//    throw new Exception(s"""Option "${rulesDiff.head} is not allowed for field "${field.mongoField}"""")
-//  }
+  if (rulesDiff.nonEmpty) {
+    throw new Exception(s"""Option "${rulesDiff.head} is not allowed for field "${field.mongoField}"""")
+  }
 
 //  val rules: Seq[ParserRule[_]] = availableRules.flatMap { s => s match {
 //    case "format" => fieldRules.get(s).map(new FormatRule(_))
@@ -139,6 +139,8 @@ abstract class FieldParser[R](protected val field: FieldParserDefinition) {
 //}
 
 class StringFieldParser(field: FieldParserDefinition) extends FieldParser[String](field) {
+  override protected def availableRules: Set[ParserRuleFactory[_]] = Set(FormatRuleFactory)
+
   override def parseValue(value: List[String]): Option[String] = {
     for {
       v <- readSingleValueRule(value)
@@ -147,6 +149,8 @@ class StringFieldParser(field: FieldParserDefinition) extends FieldParser[String
 }
 
 class BooleanFieldParser(field: FieldParserDefinition) extends FieldParser[Boolean](field) {
+  override protected def availableRules: Set[ParserRuleFactory[_]] = Set(TrueFormatRuleFactory, FalseFormatRuleFactory)
+
   override def parseValue(value: List[String]): Option[Boolean] = {
     for {
       v <- readSingleValueRule(value)
@@ -156,6 +160,8 @@ class BooleanFieldParser(field: FieldParserDefinition) extends FieldParser[Boole
 }
 
 class ArrayParser[T](field: FieldParserDefinition)(implicit view: String => T) extends FieldParser[Seq[T]](field) {
+  override protected def availableRules: Set[ParserRuleFactory[_]] = Set(FormatRuleFactory, DelimiterRuleFactory)
+
   override def parseValue(value: List[String]): Option[Seq[T]] = {
     readSingleValueRule(value).map { v =>
       delimiterRule.map(_.handle(v)).getOrElse(Seq(v))
@@ -166,6 +172,8 @@ class ArrayParser[T](field: FieldParserDefinition)(implicit view: String => T) e
 }
 
 class TokensParser(field: FieldParserDefinition) extends FieldParser[RawTokens](field) {
+  override protected def availableRules: Set[ParserRuleFactory[_]] = Set(FormatRuleFactory, DelimiterRuleFactory)
+
   override def parseValue(value: List[String]): Option[RawTokens] = {
     readSingleValueRule(value).map { v =>
       val tokens = delimiterRule.map(_.handle(v)).getOrElse(Seq(v))
