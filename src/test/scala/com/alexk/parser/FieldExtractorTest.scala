@@ -101,9 +101,8 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |      {
       |        "column_index": 3,
       |        "db_field": "info.cf",
-      |        "delimiter": ",",
-      |        "key_value_delimiter": [":"],
-      |        "value_list_delimiter": ["|"]
+      |        "value_list_delimiter": ["|"],
+      |        "format": "PREFIX:(cf)"
       |      }
       |    ],
       |    "new" : [
