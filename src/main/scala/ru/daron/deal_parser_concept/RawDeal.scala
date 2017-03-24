@@ -4,7 +4,13 @@ import org.joda.time.DateTime
 
 
 case class Tag(name: String)
-case class AddInfo(numericFields: Map[String, Double], booleanFields: Map[String, Boolean], textFields: Map[String, String], listFields: Map[String, List[String]], dateFields: Map[String, DateTime] = Map.empty[String, DateTime])
+
+case class AddInfo(numericFields: Map[String, Double],
+                   booleanFields: Map[String, Boolean],
+                   textFields: Map[String, String],
+                   listFields: Map[String, List[String]],
+                   dateFields: Map[String, DateTime])
+
 object AddInfo {
   val empty = AddInfo(Map(), Map(), Map(), Map(), Map())
 }

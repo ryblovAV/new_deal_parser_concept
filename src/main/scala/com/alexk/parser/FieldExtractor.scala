@@ -1,17 +1,9 @@
 package com.alexk.parser
 
-import java.io.{InputStream, InputStreamReader}
-import java.nio.charset.Charset
+import com.alexk.parser.FieldParserDefinition.{FieldRules, RuleParams}
+import ru.daron.deal_parser_concept._
 
-import com.alexk.parser.JsonConfigReader.JsonFieldDefinition
-import com.alexk.parser.legacy.XMLProductStreamProcessor
-import org.supercsv.io.CsvListReader
-import org.supercsv.prefs.CsvPreference
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-import ru.daron.deal_parser_concept.RawDeal
-
-import scala.util.{Success, Try}
+import scala.util.Try
 import scala.xml.{Node, NodeSeq}
 
 object ParserType extends Enumeration {
@@ -60,7 +52,7 @@ object CsvFieldExtractor {
     new CsvFieldExtractor(fieldIndex)
   }
 
-  def fromIndices(fields: List[CsvFieldDefinition]): CsvFieldExtractor = {
+  def fromIndices(fields: Seq[CsvFieldDefinition]): CsvFieldExtractor = {
     val fieldIndex = fields.map(f => f.name -> f.index).toMap
     new CsvFieldExtractor(fieldIndex)
   }
@@ -73,136 +65,181 @@ class CsvFieldExtractor(fieldIndex: Map[String, Int]) extends FieldExtractor[Lis
   }
 }
 
-//trait FieldParser {
-//  protected def parseValue(value: List[String]): RawDeal => RawDeal
-//  def acceptedType: Class[_]
-//
+trait FieldParserBase[R] {
+  protected def availableRules: Seq[String] = Seq.empty
+  def parseValue(value: List[String]): Seq[(String, R)]
+}
+
+abstract class FieldParser[R](protected val field: FieldParserDefinition) extends FieldParserBase[R] {
+  protected val multiValue: Boolean = false
+
+  private val fieldRules = field.rules
+  private val rulesDiff = fieldRules.keySet -- availableRules.toSet
+
+  if (rulesDiff.nonEmpty) {
+    throw new Exception(s"""Option "${rulesDiff.head} is not allowed for field "${field.mongoField}"""")
+  }
+
+  val rules: Seq[ParserRule[_, _]] = availableRules.flatMap { s => s match {
+    case "format" => fieldRules.get(s).map(new FormatRule(_))
+    case "true_format" => fieldRules.get(s).map(new BooleanTrueFormatRule(_))
+    case "false_format" => fieldRules.get(s).map(new BooleanFalseFormatRule(_))
+  }}
+
+  //  def parse(value: List[String]): Option[R]
+
+  def parseValue(value: List[String]): Seq[(String, R)] = {
+    val initValue =
+    //    if (multiValue)
+      new ReadSingleValueRule().handle(value)
+    // else ...
+
+    //initValue.map(s => rules.foldLeft(s) { case (v, rule) => rule.handle(v)})
+    initValue.toList.map(v => field.mongoField -> //v.asInstanceOf[R])
+    rules.headOption.map(rule => rule.asInstanceOf[ParserRule[String, R]].handle(v)).getOrElse(v.asInstanceOf[R]))
+//    initValue.toList.map { v =>
+//      rules.foldLeft(v) { case (acc, rule) => rule.})
+  }
+
+  //  def acceptedType: Class[_]
+}
+
+//trait InfoFieldParser[R] extends FieldParser[R] {
+//  override def parseValue(value: List[String]): Seq[(String, R)] = {
+//    super.parseValue(value).map { case (mf, v) => mf -> Map() }
+//  }
 //}
 
-sealed trait ParserRule {
-//  protected val ruleChain: Seq[ParserRule]
-  def parseValue(value: List[String]): Option[_]// RawDeal => RawDeal
-//  final def parse(value: List[String]): RawDeal => RawDeal =
-//
+class StringFieldParser(field: FieldParserDefinition) extends FieldParser[String](field) {
+
+
+  //  override def parse(value: List[String]): Option[String] = {
+  //    val raw =
+  //
+  //    raw
+  //  }
+  override protected def availableRules: Seq[String] = Seq("format")
 }
+
+class BooleanFieldParser(field: FieldParserDefinition) extends FieldParser[Boolean](field) {
+  override protected def availableRules: Seq[String] = Seq("true_format", "false_format")
+  //  override def parse(value: List[String]): Option[Boolean] = {
+  //    None
+  //  }
+}
+
+abstract class ParserRule[T, R] {
+  def handle(value: T): R // RawDeal => RawDeal
+}
+//  val availableRules = Set.empty[String]
+
+class ReadSingleValueRule extends ParserRule[List[String], Option[String]] {
+  override def handle(value: List[String]): Option[String] = if (value.size > 1)
+    throw new Exception(s"""Only one value allowed for field "1"""")
+  else
+    value.headOption.map(_.trim).filter(_.nonEmpty)
+}
+
+//  def apply(fieldParserDefinition: FieldParserDefinition): ParserRule[T, R] = {
+//    val rulesDiff = fieldParserDefinition.rules.keySet -- availableRules
 //
-//final case class IdParser() extends ParserRule {
+//    if (rulesDiff.nonEmpty) {
+//      throw new Exception(s"""Option "${rulesDiff.head} is not allowed for field "${fieldParserDefinition.mongoField}"""")
+//    }
 //
-//}
+//    this
+//  }
+
+
+class FormatRule(params: RuleParams) extends ParserRule[String, String] {
+  private val config = params.left.get
+  Formatter.process("test", config) // will throw exception in case of corrupted config
+  override def handle(value: String): String = Formatter.process(value, config)
+}
+
+class BooleanTrueFormatRule(params: RuleParams) extends ParserRule[String, Boolean] {
+  protected val config: String = params.left.get
+  override def handle(value: String): Boolean = value.toLowerCase == config.toLowerCase
+}
+
+class BooleanFalseFormatRule(params: RuleParams) extends BooleanTrueFormatRule(params) {
+  override def handle(value: String): Boolean = !super.handle(value)
+}
+
+// delimiter
+// true format
+// bool
+// tt
+// cf
+
+
+object FieldParserFactory {
+  def apply(field: FieldParserDefinition): FieldParserBase[_] = {
+    field.mongoField match {
+      case "_id" => new StringFieldParser(field)
+      case "t" => new StringFieldParser(field)
+      case "at" => new StringFieldParser(field)
+      case "tt" => null
+      case "tags" => null
+      case "info.cf" => null
+      case "info.bf" => new BooleanFieldParser(field)
+      case "ia" => new BooleanFieldParser(field)
+    }
+  }
+}
 
 class UniversalDealParser[T](currency: Currency.Value,
                              fieldExtractor: FieldExtractor[T],
-                             fields: Map[String, (String, ParserRule)]) {
+                             val fields: Seq[(String, String, FieldParserBase[_])]) {
 
-  def parseDeal(in: T): Either[String, List[RawDeal]] = {
-    try {
-      val valuesList: List[(String, Option[_])] = fields
-        .toList.map { case (field, (mongoField, rule)) =>
+  def parseDeal(in: T): Try[List[RawDeal]] = {
+    Try {
+      val valuesList: Seq[(String, _)] = fields
+        .toList.flatMap { case (field, mongoField, rule) =>
         val value = fieldExtractor.readField(in, field)
-        val parsed = rule.parseValue(value)
-        mongoField -> parsed
+        if (rule != null) rule.parseValue(value) else Nil // TODO remove NULL check
       }
 
-      // merge by key???
-
-      val values = valuesList.toMap
-
-      Right(RawDeal.empty.copy(id = values("_id").get.asInstanceOf[String]) :: Nil)
-    } catch {
-      case e: Exception => Left(e.getMessage)
-    }
-  }
-}
-
-trait FeedParser {
-  val dealParser: UniversalDealParser[_]
-  def parse(stream: InputStream): Iterator[RawDeal]
-
-  // TODO close
-}
-
-object FeedParser {
-  def apply(parserType: ParserType.Value,
-            currency: Currency.Value,
-            fields: Seq[(String, JsonFieldDefinition)]): FeedParser = {
-
-    parserType match {
-      case ParserType.XML =>
-        val xmlDealParser = new UniversalDealParser[Node](currency, new XmlFieldExtractor(), Map.empty)
-
-        val feedParser = ???
-        null
-      case ParserType.CSV =>
-
-        new FeedParser {
-          override val dealParser = new UniversalDealParser[List[String]](currency, CsvFieldExtractor.fromIndices(Nil), // TODO
-            Map.empty) {
-
+      // merge by key
+      val values: Map[String, Any] = valuesList.groupBy(_._1).map { case (key, list) =>
+          val definedValues = list.map(_._2)
+          if (definedValues.size < 2)
+            list.head
+          else {
+            if (definedValues.head.isInstanceOf[Seq[_]])
+              key -> Some(definedValues.flatMap(_.asInstanceOf[Seq[_]]))
+            else
+              throw new Exception(s"Multiple values found for a field that allows a single value only: $key")
           }
-
-          override def parse(stream: InputStream): Iterator[RawDeal] = {
-            val reader = new InputStreamReader(stream, Charset.forName("utf-8"))
-            val (quoteChar, delimiterChar, endOfLineSymbol) = ('"', '\t', "\n")
-            val csvReader = new CsvListReader(reader, new CsvPreference.Builder(quoteChar, delimiterChar, endOfLineSymbol).build)
-            import scala.collection.convert.wrapAsScala._
-
-            val iterator: Iterator[List[String]] = new Iterator[java.util.List[String]] {
-              override def hasNext: Boolean = true
-
-              override def next(): java.util.List[String] = csvReader.read()
-            }.takeWhile(_ != null).map(_.toList)
-
-            iterator.map(line => dealParser.parseDeal(line)).map(_.right.get).flatten
-          }
-        }
-    }
-  }
-}
-
-object JsonConfigReader {
-  case class JsonConfiguration(feedFormat: String, currency: String, data: JsObject)
-  case class JsonFieldDefinition(mongoField: String, rules: Map[String, Either[String, List[String]]])
-
-  private implicit val configurationReads: Reads[JsonConfiguration] = (
-    (JsPath \ "feed_format").read[String] and
-      (JsPath \ "currency").read[String] and
-      (JsPath \ "data").read[JsObject]
-    ) (JsonConfiguration.apply _)
-
-  private def readConfig(jsonString: String): JsonConfiguration = Json.parse(jsonString).validate[JsonConfiguration] match {
-    case s: JsSuccess[JsonConfiguration] => s.get
-    case e: JsError => throw new Exception(s"Can't read JSON parser configuration: $e")
-  }
-
-  private def parseFieldDefinition(fieldName: String, json: JsValue): JsonFieldDefinition = {
-    val rules = json.as[JsObject].value.map { case (k, v) => k -> (v match {
-      case s: JsString => Left(s.value.trim)
-      case b: JsBoolean => Left(b.toString)
-      case n: JsNumber => Left(n.toString)
-      case a: JsArray => Right(a.value.map(_.as[String].trim).toList)
-      case _ => throw new Exception(s"""No value specified for field "$fieldName", rule "$k"""")
-    })
-    }.toMap
-
-    val mongoField = Try(rules("db_field").left.get).getOrElse(
-      throw new Exception(s""""db_field" must be specified for field "$fieldName""""))
-
-    JsonFieldDefinition(mongoField, rules - "db_field")
-  }
-
-  def createParser(jsonString: String): FeedParser = {
-    val config: JsonConfiguration = readConfig(jsonString)
-
-    val parserType = ParserType.withName(config.feedFormat)
-    val currency = Currency.withName(config.currency)
-
-    val fieldDefinitions = config.data.fields.flatMap { case (name, jsValue) =>
-      jsValue.validate[JsArray] match {
-        case s: JsSuccess[JsArray] => s.get.value.map(name -> parseFieldDefinition(name, _))
-        case e: JsError => throw new Exception(s"Field definition must be an array: $e")
       }
-    }
 
-    FeedParser(parserType, currency, fieldDefinitions)
+      val addInfo = AddInfo.empty.copy(
+//        booleanFields = values.get("info.bf").map(_.asInstanceOf[Map[String,Boolean]]).getOrElse(Map.empty)
+        //listFields = values.get("info.cf").map(_.asInstanceOf[Map[String,List[String]]]).getOrElse(Map.empty)
+      )
+
+      RawDeal.empty.copy(
+        id = values("_id").asInstanceOf[String],
+        title = values.get("t").map(_.asInstanceOf[String]),
+        description = values.get("at").map(_.asInstanceOf[String]),
+        isActive = values.get("is").map(_.asInstanceOf[Boolean]).getOrElse(false), // should be true really
+        rawTokens = values.get("tt").map(_.asInstanceOf[RawTokens]).getOrElse(RawTokens.empty),
+        tags = values.get("tags").map(_.asInstanceOf[List[Tag]]).getOrElse(Nil),
+        addInfo = addInfo
+      ) :: Nil
+    }
   }
 }
+
+
+case class FeedParserDefinition(parserType: ParserType.Value,
+                                currency: Currency.Value,
+                                feedParsingProperties: Map[String, String],
+                                fields: Seq[FieldParserDefinition])
+
+object FieldParserDefinition {
+  type RuleParams = Either[String, List[String]]
+  type FieldRules = Map[String, RuleParams]
+}
+case class FieldParserDefinition(feedField: String, mongoField: String, rules: FieldRules)
+
