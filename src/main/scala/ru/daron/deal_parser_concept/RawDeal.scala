@@ -15,7 +15,22 @@ object AddInfo {
   val empty = AddInfo(Map(), Map(), Map(), Map(), Map())
 }
 
-case class RawTokens(single: Map[String, String], multi: Map[String, List[String]])
+case class RawTokens(single: Map[String, String], multi: Map[String, List[String]]) {
+  def merge(other: RawTokens): RawTokens = RawTokens(
+    mergeMaps(this.single, other.single)((v1, v2) => v1),
+    mergeMaps(this.multi, other.multi)((v1, v2) => (v1 ++ v2).distinct)
+  )
+
+  def mergeMaps[K, V](m1: Map[K, V], m2: Map[K, V])(merge: (V, V) => V): Map[K, V] = {
+    m1.foldLeft(m2){ case (acc, (key, value)) =>
+      acc.get(key) match {
+        case None => acc.updated(key, value)
+        case Some(existingValue) => acc.updated(key, merge(value, existingValue))
+      }
+    }
+  }
+}
+
 object RawTokens {
   val empty = RawTokens(Map.empty, Map.empty)
 }

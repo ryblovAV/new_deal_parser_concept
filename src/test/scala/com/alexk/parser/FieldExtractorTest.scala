@@ -71,7 +71,7 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |      {
       |        "column_index": 1,
       |        "db_field" : "t",
-      |        "format": "APPEND:;|UPPERCASE"
+      |        "format": "APPEND:;postfix|UPPERCASE"
       |      },
       |      {
       |        "column_index": 1,
@@ -81,7 +81,8 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |      {
       |        "column_index": 1,
       |        "db_field" : "tags",
-      |        "delimiter" : [" ", ":"]
+      |        "delimiter" : [" ", ":"],
+      |        "format": "LOWERCASE"
       |      }
       |    ],
       |    "description" : [
@@ -130,7 +131,7 @@ class FieldExtractorTest extends FunSuite with Matchers {
     conf.currency shouldBe Currency.USD
     conf.fields should have size 8
 
-    conf.fields.find(_.mongoField == "t").get.rules("format") shouldBe Left("APPEND:;|UPPERCASE")
+    conf.fields.find(_.mongoField == "t").get.rules("format") shouldBe Left("APPEND:;postfix|UPPERCASE")
     conf.fields.find(_.mongoField == "tags").get.rules("delimiter") shouldBe Right(Seq(" ", ":"))
   }
 
