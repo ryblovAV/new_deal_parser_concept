@@ -1,5 +1,7 @@
 package ru.daron.deal_parser_concept
 
+import javax.script.{Compilable, Invocable, ScriptEngineManager}
+
 sealed trait Formatter {
   def apply(in: String): String
 }
@@ -32,6 +34,25 @@ object Formatter {
     case _ => throw new Exception(s"unknown formatter: $configStr")
   }
 }
+
+case class JSFormatter(js: String) extends Formatter {
+
+  private val invocable = {
+    val engine = new ScriptEngineManager().getEngineByName("nashorn")
+    val compilable = engine.asInstanceOf[Compilable]
+    val invocable = engine.asInstanceOf[Invocable]
+    val statement = s"function test(p1) {$js};"
+    val compiled = compilable.compile(statement)
+
+    compiled.eval()
+    invocable
+  }
+
+  override def apply(in: String): String = {
+    invocable.invokeFunction("test", in).asInstanceOf[String]
+  }
+}
+
 
 case class PrefixFormatter(prefix: String) extends Formatter {
   override def apply(in: String): String = prefix + in

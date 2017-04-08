@@ -70,5 +70,10 @@ class FormatterSpec extends FunSuite {
     assert(Formatter.process(in, strConfig) === out)
   }
 
+  test("JS formatter") {
+    val jsFormatter = JSFormatter("return p1 + '_test';")
+    assert(jsFormatter("word") === "word_test")
+  }
+
 
 }
