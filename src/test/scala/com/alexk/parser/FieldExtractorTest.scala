@@ -1,6 +1,9 @@
 package com.alexk.parser
 
 import org.scalatest.{FunSuite, Matchers}
+import ru.daron.deal_parser_concept.AddInfo
+
+import scala.util.Success
 
 class FieldExtractorTest extends FunSuite with Matchers {
 
@@ -111,6 +114,13 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |        "db_field" : "info.bf",
       |        "true_format" : "yes"
       |      }
+      |    ],
+      |    "active" : [
+      |      {
+      |        "column_index": 5,
+      |        "db_field" : "info.bf",
+      |        "boolean_function" : "if (p1.toLowerCase() == 'active') return true; else return false;"
+      |      }
       |    ]
       |  }
       |}
@@ -122,13 +132,13 @@ class FieldExtractorTest extends FunSuite with Matchers {
   //"exclude" : ["Ignore", "these", "words"],
   //"skip_stop_words" : ["es", "us"]
 
-  val csvLine= "id12345\tThe product title e2:e4\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes"
+  val csvLine= "id12345\tThe product title e2:e4\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes\tactive"
 
   test("parse JSON config") {
     val conf = JsonConfigReader.read(csvJson)
 
     conf.currency shouldBe Currency.USD
-    conf.fields should have size 8
+    conf.fields should have size 9
 
     conf.fields.find(_.mongoField == "t").get.rules("format") shouldBe Left("APPEND:;postfix|UPPERCASE")
     conf.fields.find(_.mongoField == "tags").get.rules("delimiter") shouldBe Right(Seq(" ", ":"))
@@ -138,9 +148,11 @@ class FieldExtractorTest extends FunSuite with Matchers {
     val conf = JsonConfigReader.read(csvJson)
 
     val dealParser = FeedParser(conf).dealParser.asInstanceOf[UniversalDealParser[List[String]]]
-    dealParser.fields should have size 8
+    dealParser.fields should have size 9
 
     val parsed = dealParser.parseDeal(csvLine.split('\t').toList)
+
+    parsed.map(_.head.addInfo.booleanFields) shouldEqual Success(Map("new" -> true, "active" -> true))
 
     println(parsed)
   }

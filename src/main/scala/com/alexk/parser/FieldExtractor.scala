@@ -3,6 +3,7 @@ package com.alexk.parser
 import com.alexk.parser.FieldParserDefinition.FieldRules
 import ru.daron.deal_parser_concept._
 
+import scala.collection.immutable.Map
 import scala.util.Try
 import scala.xml.{Node, NodeSeq}
 
@@ -88,6 +89,15 @@ class UniversalDealParser[T](currency: Currency.Value,
                              fieldExtractor: FieldExtractor[T],
                              val fields: Seq[(String, String, FieldParser[_])]) {
 
+  private def extractFields[P](l: List[Map[String, P]]): Map[String, P] = l.reduce(_ ++ _)
+
+  private def parseAddInfoFields[P](name: String, values: Map[String, Any]): Map[String, P] = {
+    values.get(name).map {
+        case  l: List[Map[String, P]] => extractFields[P](l)
+        case m: Map[String, P] => m
+    }.getOrElse(Map.empty)
+  }
+
   def parseDeal(in: T): Try[List[RawDeal]] = {
     Try {
       val valuesList: Seq[(String, Any)] = fields
@@ -107,14 +117,24 @@ class UniversalDealParser[T](currency: Currency.Value,
               case _: Seq[_] => key -> Some(definedValues.flatMap(_.asInstanceOf[Seq[_]]))
               case _: RawTokens => key -> definedValues.map(_.asInstanceOf[RawTokens])
                 .foldLeft(RawTokens.empty) { case (rt, t) => rt.merge(t) }
-              case _ => throw new Exception(s"Multiple values found for a field that allows a single value only: $key")
+              case m: Map[_, Boolean] if key == "info.bf" =>
+                key -> definedValues
+              case s =>
+                throw new Exception(s"Multiple values found for a field that allows a single value only: $key")
             }
           }
       }
 
+      val textFields = parseAddInfoFields[String]("info.tf", values)
+      val numericFields = parseAddInfoFields[Double]("info.nf", values)
+      val booleanFields = parseAddInfoFields[Boolean]("info.bf", values)
+      val listFields = parseAddInfoFields[List[String]]("info.cf", values)
+
       val addInfo = AddInfo.empty.copy(
-        booleanFields = values.get("info.bf").map(_.asInstanceOf[Map[String, Boolean]]).getOrElse(Map.empty),
-        listFields = values.get("info.cf").map(_.asInstanceOf[Map[String, List[String]]]).getOrElse(Map.empty)
+        booleanFields = booleanFields,
+        numericFields = numericFields,
+        textFields = textFields,
+        listFields = listFields
       )
 
 //      def readStringOpt(name: String): Option[String] = values.get(name).flatMap(_.asInstanceOf[Option[String]])

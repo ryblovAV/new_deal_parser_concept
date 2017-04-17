@@ -1,10 +1,10 @@
 package ru.daron.deal_parser_concept
 
-sealed trait Formatter {
-  def apply(in: String): String
-}
+import javax.script.{Compilable, Invocable, ScriptEngineManager}
 
-object Formatter {
+import com.alexk.parser.{ParserRule, ParserRuleFactory}
+
+object FormatRuleFactory extends ParserRuleFactory[String] {
 
   val PREFIX = "PREFIX"
   val APPEND = "APPEND"
@@ -12,47 +12,60 @@ object Formatter {
   val REPLACE = "REPLACE"
   val UPPERCASE = "UPPERCASE"
   val LOWERCASE = "LOWERCASE"
+  val JS_FUNC = "JS_FUNC"
 
-  def process(in: String, configStr: String): String = {
-    configStr.split('|').map(create).foldLeft(in)((acc, formatter) => formatter(acc))
-  }
+  override val paramName: String = "format"
 
-  def create(configStr: String): Formatter = configStr.trim.split(':') match {
-    case Array(PREFIX, prefix) => PrefixFormatter(prefix)
-    case Array(APPEND, append) => AppendFormatter(append)
-    case Array(REMOVE, remove) => RemoveFormatter(remove)
-    case Array(REPLACE, str) =>
+  override val paramsIsArray: Boolean = false
+
+  def createOne(param: String): ParserRule[String] = param.trim.split(':').toList match {
+    case List(PREFIX, prefix) => PrefixFormatter(prefix)
+    case List(APPEND, append) => AppendFormatter(append)
+    case List(REMOVE, remove) => RemoveFormatter(remove)
+    case List(REPLACE, str) =>
       str.split('~') match {
         case Array(source, replacement) => ReplaceFormatter(source, replacement)
         case Array(source) => ReplaceFormatter(source, "")
         case _ => throw new Exception(s"Wrong config for replacement formatter: $str")
       }
-    case Array(UPPERCASE) => UpperCaseFormatter
-    case Array(LOWERCASE) => LowerCaseFormatter
-    case _ => throw new Exception(s"unknown formatter: $configStr")
+    case List(UPPERCASE) => UpperCaseFormatter
+    case List(LOWERCASE) => LowerCaseFormatter
+    case JS_FUNC::jsCode => JSFormatter[String](jsCode.mkString(":"))
+    case _ => throw new Exception(s"unknown formatter: $param")
+  }
+
+  override def create(param: String): ParserRule[String] = {
+    val formatters = param.split('|').map(FormatRuleFactory.createOne).toList
+    CompositeFormatter(formatters)
   }
 }
 
-case class PrefixFormatter(prefix: String) extends Formatter {
-  override def apply(in: String): String = prefix + in
+case class CompositeFormatter(formatters: List[ParserRule[String]]) extends ParserRule[String] {
+  override def handle(value: String): String = {
+    formatters.foldLeft(value)((acc, formatter) => formatter.handle(acc))
+  }
 }
 
-case class AppendFormatter(append: String) extends Formatter {
-  override def apply(in: String): String = in + append
+case class PrefixFormatter(prefix: String) extends ParserRule[String]  {
+  override def handle(value: String): String = prefix + value
 }
 
-case class RemoveFormatter(remove: String) extends Formatter {
-  override def apply(in: String): String = in.replaceAll(remove, "")
+case class AppendFormatter(append: String) extends ParserRule[String] {
+  override def handle(value: String): String = value + append
 }
 
-case class ReplaceFormatter(source: String, replacement: String) extends Formatter {
-  override def apply(in: String): String = in.replaceAll(source, replacement)
+case class RemoveFormatter(remove: String) extends ParserRule[String] {
+  override def handle(value: String): String = value.replaceAll(remove, "")
 }
 
-case object UpperCaseFormatter extends Formatter {
-  override def apply(in: String): String = in.toUpperCase
+case class ReplaceFormatter(source: String, replacement: String) extends ParserRule[String] {
+  override def handle(value: String): String = value.replaceAll(source, replacement)
 }
 
-case object LowerCaseFormatter extends Formatter {
-  override def apply(in: String): String = in.toLowerCase
+case object UpperCaseFormatter extends ParserRule[String] {
+  override def handle(value: String): String = value.toUpperCase
+}
+
+case object LowerCaseFormatter extends ParserRule[String] {
+  override def handle(value: String): String = value.toLowerCase
 }
