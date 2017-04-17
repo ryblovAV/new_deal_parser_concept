@@ -1,6 +1,6 @@
 package com.alexk.parser
 
-import ru.daron.deal_parser_concept.RawTokens
+import ru.daron.deal_parser_concept._
 
 abstract class FieldParser[R](protected val field: FieldParserDefinition) {
   protected val multiValue: Boolean = false
@@ -31,6 +31,10 @@ abstract class FieldParser[R](protected val field: FieldParserDefinition) {
   val delimiterRule = callFactory(DelimiterRuleFactory)
   val valueListDelimiterRule = callFactory(ValueListDelimiterRuleFactory)
 
+  val jsStringFunction = callFactory(JsStringFunctionRuleFactory)
+  val jsBooleanFunctionRule = callFactory(JsBooleanFunctionRuleFactory)
+  val jsNumberFunctionRule = callFactory(JsNumberFunctionRuleFactory)
+
   def parseValue(value: List[String]): Option[R]
 }
 
@@ -46,12 +50,12 @@ class StringFieldParser(field: FieldParserDefinition) extends FieldParser[String
 }
 
 class BooleanFieldParser(field: FieldParserDefinition) extends FieldParser[Boolean](field) {
-  override def availableRules: Set[ParserRuleFactory[_]] = Set(TrueFormatRuleFactory, FalseFormatRuleFactory)
+  override def availableRules: Set[ParserRuleFactory[_]] = Set(TrueFormatRuleFactory, FalseFormatRuleFactory, JsBooleanFunctionRuleFactory)
 
   override def parseValue(value: List[String]): Option[Boolean] = {
     for {
       v <- readSingleValueRule(value)
-      rule <- List(trueFormatRule, falseFormatRule).flatten.headOption
+      rule <- List(trueFormatRule, falseFormatRule, jsBooleanFunctionRule).flatten.headOption
     } yield rule.handle(v)
   }
 }
@@ -108,6 +112,12 @@ class AddInfoBooleanFieldParser(field: FieldParserDefinition) extends AddInfoFie
   field, new BooleanFieldParser(field.copy(
     rules = field.rules.filterNot(r => AddInfoRules.rules.map(_.paramName).contains(r._1))))
 )
+
+class AddInfoTextFieldParser(field: FieldParserDefinition) extends AddInfoFieldParser[String](
+  field, new StringFieldParser(field.copy(
+    rules = field.rules.filterNot(r => AddInfoRules.rules.map(_.paramName).contains(r._1))))
+)
+
 
 class AddInfoListFieldParser(field: FieldParserDefinition) extends AddInfoFieldParser[Seq[String]](
   field, new ValueListParser(field.copy(

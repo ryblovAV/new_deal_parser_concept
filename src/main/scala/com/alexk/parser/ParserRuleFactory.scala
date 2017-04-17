@@ -1,7 +1,6 @@
 package com.alexk.parser
 
 import com.alexk.parser.FieldParserDefinition.FieldRules
-import ru.daron.deal_parser_concept.Formatter
 
 trait ParserRuleFactory[T] {
   val paramName: String
@@ -18,18 +17,6 @@ trait ParserRuleFactory[T] {
 
   def create(param: String): ParserRule[T] = ???
   def create(params: Seq[String]): ParserRule[T] = ???
-}
-
-
-object FormatRuleFactory extends ParserRuleFactory[String] {
-  override val paramName: String = "format"
-
-  override def create(param: String): ParserRule[String] = {
-    // will throw exception in case of corrupted config
-    Formatter.process("test", param)
-
-    (value: String) => Formatter.process(value, param)
-  }
 }
 
 object TrueFormatRuleFactory extends ParserRuleFactory[Boolean] {
