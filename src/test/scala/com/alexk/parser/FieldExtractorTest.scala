@@ -121,7 +121,42 @@ class FieldExtractorTest extends FunSuite with Matchers {
       |        "db_field" : "info.bf",
       |        "boolean_function" : "if (p1.toLowerCase() == 'active') return true; else return false;"
       |      }
+      |    ],
+      |    "base_sku_id" : [
+      |      {
+      |        "column_index": 6,
+      |        "db_field" : "info.tf",
+      |        "text_function" : "if (p1 == '67890') return p1 + '_id'; else return p1;"
+      |      }
+      |    ],
+      |    "brand" : [
+      |      {
+      |        "column_index": 7,
+      |        "db_field" : "info.tf",
+      |        "text_function" : "switch(p1) { case '01': return 'brand_1'; case '02': return 'brand_2'; case '03': return 'brand_3'; default: return p1; }"
+      |      }
+      |    ],
+      |    "cashback" : [
+      |      {
+      |        "column_index": 8,
+      |        "db_field" : "info.nf",
+      |        "number_function" : "return (p1 - 1) * 10;"
+      |      }
+      |    ],
+      |    "age" : [
+      |      {
+      |        "column_index": 9,
+      |        "db_field" : "info.nf"
+      |      }
+      |    ],
+      |   "features": [
+      |      {
+      |        "column_index": 10,
+      |        "db_field": "info.cf",
+      |        "value_list_delimiter": ["|"]
+      |      }
       |    ]
+      |
       |  }
       |}
     """.stripMargin
@@ -132,13 +167,13 @@ class FieldExtractorTest extends FunSuite with Matchers {
   //"exclude" : ["Ignore", "these", "words"],
   //"skip_stop_words" : ["es", "us"]
 
-  val csvLine= "id12345\tThe product title e2:e4\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes\tactive"
+  val csvLine= "id12345\tThe product title e2:e4\tLong description : not so long\tWoman: Shoes|Skirts, Men: Hats\tyes\tactive\t67890\t02\t12\t24\ta|b|c"
 
   test("parse JSON config") {
     val conf = JsonConfigReader.read(csvJson)
 
     conf.currency shouldBe Currency.USD
-    conf.fields should have size 9
+    conf.fields should have size 14
 
     conf.fields.find(_.mongoField == "t").get.rules("format") shouldBe Left("APPEND:;postfix|UPPERCASE")
     conf.fields.find(_.mongoField == "tags").get.rules("delimiter") shouldBe Right(Seq(" ", ":"))
@@ -148,11 +183,14 @@ class FieldExtractorTest extends FunSuite with Matchers {
     val conf = JsonConfigReader.read(csvJson)
 
     val dealParser = FeedParser(conf).dealParser.asInstanceOf[UniversalDealParser[List[String]]]
-    dealParser.fields should have size 9
+    dealParser.fields should have size 14
 
     val parsed = dealParser.parseDeal(csvLine.split('\t').toList)
 
     parsed.map(_.head.addInfo.booleanFields) shouldEqual Success(Map("new" -> true, "active" -> true))
+    parsed.map(_.head.addInfo.textFields) shouldEqual Success(Map("base_sku_id" -> "67890_id", "brand" -> "brand_2"))
+    parsed.map(_.head.addInfo.numericFields) shouldEqual Success(Map("cashback" -> 110, "age" -> 24))
+    parsed.map(_.head.addInfo.listFields) shouldEqual Success(Map("product_subcategory2" -> List("(cf)Woman: Shoes", "(cf)Skirts, Men: Hats"), "features" -> List("a", "b", "c")))
 
     println(parsed)
   }

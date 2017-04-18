@@ -40,12 +40,20 @@ abstract class FieldParser[R](protected val field: FieldParserDefinition) {
 
 
 class StringFieldParser(field: FieldParserDefinition) extends FieldParser[String](field) {
-  override def availableRules: Set[ParserRuleFactory[_]] = Set(FormatRuleFactory)
+  override def availableRules: Set[ParserRuleFactory[_]] = Set(FormatRuleFactory, JsStringFunctionRuleFactory)
 
   override def parseValue(value: List[String]): Option[String] = {
-    for {
-      v <- readSingleValueRule(value)
-    } yield formatRule.map(_.handle(v)).getOrElse(v)
+    readSingleValueRule(value).map(v =>
+      List(formatRule, jsStringFunction).flatten.headOption.map(_.handle(v)).getOrElse(v))
+  }
+}
+
+class NumberFieldParser(field: FieldParserDefinition) extends FieldParser[Double](field) {
+  override def availableRules: Set[ParserRuleFactory[_]] = Set(JsNumberFunctionRuleFactory)
+
+  override def parseValue(value: List[String]): Option[Double] = {
+    readSingleValueRule(value).map(v =>
+      List(jsNumberFunctionRule).flatten.headOption.map(_.handle(v)).getOrElse(v.toDouble))
   }
 }
 
@@ -118,6 +126,10 @@ class AddInfoTextFieldParser(field: FieldParserDefinition) extends AddInfoFieldP
     rules = field.rules.filterNot(r => AddInfoRules.rules.map(_.paramName).contains(r._1))))
 )
 
+class AddInfoNumberFieldParser(field: FieldParserDefinition) extends AddInfoFieldParser[Double](
+  field, new NumberFieldParser(field.copy(
+    rules = field.rules.filterNot(r => AddInfoRules.rules.map(_.paramName).contains(r._1))))
+)
 
 class AddInfoListFieldParser(field: FieldParserDefinition) extends AddInfoFieldParser[Seq[String]](
   field, new ValueListParser(field.copy(

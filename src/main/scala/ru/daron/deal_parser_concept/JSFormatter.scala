@@ -3,6 +3,7 @@ package ru.daron.deal_parser_concept
 import javax.script.{Compilable, Invocable, ScriptEngineManager}
 
 import com.alexk.parser.{ParserRule, ParserRuleFactory}
+import ru.daron.deal_parser_concept.JSFormatterEngine.build
 
 object JSFormatterEngine {
   def build(js: String): Invocable = {
@@ -37,7 +38,6 @@ object JsStringFunctionRuleFactory extends ParserRuleFactory[String] {
 
   override def create(param: String): ParserRule[String] = JSFormatter[String](param)
 }
-
 
 object JsBooleanFunctionRuleFactory extends ParserRuleFactory[Boolean] {
   override val paramName: String = "boolean_function"

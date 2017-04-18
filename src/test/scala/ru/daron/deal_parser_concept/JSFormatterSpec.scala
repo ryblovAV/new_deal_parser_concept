@@ -24,7 +24,7 @@ class JSFormatterSpec extends FunSuite {
 
   test("JS boolean function") {
     val js = "if (p1 == 'active') return true; else return false;"
-    val booleanParserRule =  JsNumberFunctionRuleFactory.create(js)
+    val booleanParserRule =  JsBooleanFunctionRuleFactory.create(js)
     assert(booleanParserRule.handle("active") === true)
     assert(booleanParserRule.handle("not active") === false)
   }
@@ -35,5 +35,4 @@ class JSFormatterSpec extends FunSuite {
     assert(textParserRule.handle("active") === "active")
     assert(textParserRule.handle(" ") === "-1")
   }
-
 }

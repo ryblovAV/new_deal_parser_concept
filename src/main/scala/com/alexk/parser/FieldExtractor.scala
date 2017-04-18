@@ -80,6 +80,8 @@ object FieldParserFactory {
       case "tags" => new ArrayParser[Tag](field)(Tag)
       case "info.cf" => new AddInfoListFieldParser(field)
       case "info.bf" => new AddInfoBooleanFieldParser(field)
+      case "info.tf" => new AddInfoTextFieldParser(field)
+      case "info.nf" => new AddInfoNumberFieldParser(field)
       case "ia" => new BooleanFieldParser(field)
     }
   }
@@ -93,6 +95,7 @@ class UniversalDealParser[T](currency: Currency.Value,
 
   private def parseAddInfoFields[P](name: String, values: Map[String, Any]): Map[String, P] = {
     values.get(name).map {
+//        case  l: List[Map[String, P]] => extractFields[P](l)
         case  l: List[Map[String, P]] => extractFields[P](l)
         case m: Map[String, P] => m
     }.getOrElse(Map.empty)
@@ -118,6 +121,12 @@ class UniversalDealParser[T](currency: Currency.Value,
               case _: RawTokens => key -> definedValues.map(_.asInstanceOf[RawTokens])
                 .foldLeft(RawTokens.empty) { case (rt, t) => rt.merge(t) }
               case m: Map[_, Boolean] if key == "info.bf" =>
+                key -> definedValues
+              case m: Map[_, String] if key == "info.tf" =>
+                key -> definedValues
+              case m: Map[_, Double] if key == "info.nf" =>
+                key -> definedValues
+              case m: Map[_, List[_]] if key == "info.cf" =>
                 key -> definedValues
               case s =>
                 throw new Exception(s"Multiple values found for a field that allows a single value only: $key")
